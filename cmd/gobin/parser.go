@@ -59,14 +59,28 @@ func (p *Parser) Parse() error {
 	}
 	//parse option
 	//parse const
+	if err := p.parseConst(); err != nil {
+		return fmt.Errorf("parseConst error on %s:%d:%d: %s", p.parser.Pos.Filename, p.parser.Pos.Line, p.parser.Pos.Column, err)
+	}
 	//parse enum
 	//parse message
+	if err := p.parseMessage(); err != nil {
+		return fmt.Errorf("parseMessage error on %s:%d:%d: %s", p.parser.Pos.Filename, p.parser.Pos.Line, p.parser.Pos.Column, err)
+	}
 	return nil
 }
 func (p *Parser) parsePackage() error {
-	//_, err := p.out.WriteString("package " + p.parser.Package + "\n")
 	err := prologTemplate.ExecuteTemplate(p.out, "prolog", p.parser.Package)
 	return err
+}
+
+func (p *Parser) parseMessage() error {
+	messages := p.parser.Message
+	if len(messages) == 0 {
+		return nil
+	}
+
+	return nil
 }
 
 func (p *Parser) parseOption() error {
@@ -104,10 +118,10 @@ func (p *Parser) parseConst() error {
 			v = fmt.Sprintf("%f", *c.Value.Float)
 		case String:
 			t = "string"
-		case Bytes:
-			t = "[]byte"
+			v = fmt.Sprintf(`"%s"`, *c.Value.String)
 		case Bool:
 			t = "bool"
+			v = fmt.Sprintf("%v", *c.Value.Bool)
 		default:
 			return errors.New("invalid type")
 		}
@@ -116,6 +130,12 @@ func (p *Parser) parseConst() error {
 			Type:  t,
 			Value: v,
 		})
+	}
+	if len(consts) > 0 {
+		err := constTemplate.ExecuteTemplate(p.out, "const", consts)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

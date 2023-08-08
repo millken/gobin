@@ -157,9 +157,9 @@ type Field struct {
 // Literal is a "union" type, where only one matching value will be present.
 type Literal struct {
 	Pos       lexer.Position
-	Str       *string    `  @String`
-	Int       *int       `| @Int`
-	Float     *float64   `| @(Float|Int)`
+	String    *string    `  @String`
+	Int       *int64     `| @(["-"] Int)`
+	Float     *float64   `| @(["-"] Float|Int)`
 	Bool      *string    `| @( "true" | "false" )`
 	Reference *string    `| @Ident ( @"." @Ident )*`
 	Minus     *Literal   `| "-" @@`

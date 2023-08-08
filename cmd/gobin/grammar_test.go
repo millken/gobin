@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/participle/v2"
+	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,6 +44,21 @@ func TestOption(t *testing.T) {
 
 func TestConst(t *testing.T) {
 	require := require.New(t)
+	type Const struct {
+		Pos   lexer.Position
+		Type  *Type    `"const" @@`
+		Name  string   `@Ident`
+		Value *Literal `"=" @@`
+	}
+	type Grammar struct {
+		Pos     lexer.Position
+		Package string   ` "package" @(Ident ( "." Ident )*)`
+		Consts  []*Const `@@*`
+	}
+	parser := participle.MustBuild[Grammar](
+		participle.UseLookahead(2),
+		participle.Unquote(),
+	)
 	data, err := parser.ParseString("", `
 	package example
 	const int32 a = 1
@@ -60,16 +76,16 @@ func TestConst(t *testing.T) {
 	require.Equal(7, len(data.Consts))
 	require.Equal("a", data.Consts[0].Name)
 	require.Equal("Int32", data.Consts[0].Type.Scalar.String())
-	require.Equal(int(1), *data.Consts[0].Value.Int)
+	require.Equal(int64(1), *data.Consts[0].Value.Int)
 	require.Equal("b", data.Consts[1].Name)
 	require.Equal("Float", data.Consts[1].Type.Scalar.String())
 	require.Equal(float64(1.1), *data.Consts[1].Value.Float)
 	require.Equal("c", data.Consts[2].Name)
 	require.Equal("String", data.Consts[2].Type.Scalar.String())
-	require.Equal("hello", *data.Consts[2].Value.Str)
+	require.Equal("hello", *data.Consts[2].Value.String)
 	require.Equal("d", data.Consts[3].Name)
 	require.Equal("Bool", data.Consts[3].Type.Scalar.String())
-	require.Equal(true, *data.Consts[3].Value.Bool)
+	require.Equal("true", *data.Consts[3].Value.Bool)
 	require.Equal("e", data.Consts[4].Name)
 	require.Equal("Int64", data.Consts[4].Type.Scalar.String())
 	require.Equal(int64(-1), *data.Consts[4].Value.Int)

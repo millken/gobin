@@ -13,7 +13,11 @@ import (
 )
 `))
 	constTemplate = template.Must(template.New("const").Parse(`
-const {{ .Name }} {{ .Type }} = {{ .Value }}
+const (
+	{{- range $c := . }}
+	{{ $c.Name }} {{ $c.Type }} = {{ $c.Value }}
+	{{- end }}
+)
 `))
 
 	structTemplate = template.Must(template.New("struct").Parse(`
