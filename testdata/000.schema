@@ -1,6 +1,13 @@
 // Package demo offers a demonstration.
 // These comment lines will end up in the generated code.
 package demo
+option go_package = "./api";
+
+enum StructClass uint8 {
+    None;
+    Table;
+    Inline;
+}
 
 // Course is the grounds where the game of golf is played.
 type course struct {
