@@ -76,8 +76,58 @@ func (p *Parser) parsePackage() error {
 
 func (p *Parser) parseMessage() error {
 	messages := p.parser.Message
+	var messageT struct {
+		Name   string
+		Fields []struct {
+			Name string
+			Type string
+			Tag  int
+		}
+	}
 	if len(messages) == 0 {
 		return nil
+	}
+	for _, m := range messages {
+		messageT.Name = m.Name
+		for _, f := range m.Entries {
+			var t string
+			switch f.Field.Type.Scalar {
+			case Int32:
+				t = "int32"
+			case Int64:
+				t = "int64"
+			case Uint32:
+				t = "uint32"
+			case Uint64:
+				t = "uint64"
+			case Float:
+				t = "float32"
+			case Double:
+				t = "float64"
+			case String:
+				t = "string"
+			case Bytes:
+				t = "[]byte"
+			case Bool:
+				t = "bool"
+				// case Message:
+				// 	t = f.Type.Name
+				// case Enum:
+				// 	t = f.Type.Name
+			}
+			messageT.Fields = append(messageT.Fields, struct {
+				Name string
+				Type string
+				Tag  int
+			}{
+				Name: f.Field.Name,
+				Type: t,
+				Tag:  f.Field.Tag,
+			})
+		}
+		if err := messageTemplate.ExecuteTemplate(p.out, "message", messageT); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -94,7 +144,18 @@ func (p *Parser) parseConst() error {
 		Value string
 	}
 	var consts []constT
+	constNameExist := func(name string) bool {
+		for _, c := range consts {
+			if c.Name == name {
+				return true
+			}
+		}
+		return false
+	}
 	for _, c := range p.parser.Consts {
+		if constNameExist(c.Name) {
+			return fmt.Errorf("const name %s already exist", c.Name)
+		}
 		var t string
 		var v string
 		switch c.Type.Scalar {

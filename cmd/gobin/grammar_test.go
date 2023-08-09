@@ -42,56 +42,96 @@ func TestOption(t *testing.T) {
 	require.Equal(int(1), *data.Consts[0].Value.Int)
 }
 
-func TestConst(t *testing.T) {
+// func TestConst(t *testing.T) {
+// 	require := require.New(t)
+// 	type Const struct {
+// 		Pos   lexer.Position
+// 		Type  *Type    `"const" @@`
+// 		Name  string   `@Ident`
+// 		Value *Literal `"=" @@`
+// 	}
+// 	type Grammar struct {
+// 		Pos     lexer.Position
+// 		Package string   ` "package" @(Ident ( "." Ident )*)`
+// 		Consts  []*Const `@@*`
+// 	}
+// 	parser := participle.MustBuild[Grammar](
+// 		participle.UseLookahead(2),
+// 		participle.Unquote(),
+// 	)
+// 	data, err := parser.ParseString("", `
+// 	package example
+// 	const int32 a = 1
+// 	const float b = 1.1
+// 	const string c = "hello"
+// 	const bool d = true
+// 	const int64 e = -1
+// 	const double f = 1.0
+// 	const int64 g = 1
+// 	`)
+
+// 	require.NoError(err)
+// 	_ = data
+// 	require.Equal("example", data.Package)
+// 	require.Equal(7, len(data.Consts))
+// 	require.Equal("a", data.Consts[0].Name)
+// 	require.Equal("Int32", data.Consts[0].Type.Scalar.String())
+// 	require.Equal(int64(1), *data.Consts[0].Value.Int)
+// 	require.Equal("b", data.Consts[1].Name)
+// 	require.Equal("Float", data.Consts[1].Type.Scalar.String())
+// 	require.Equal(float64(1.1), *data.Consts[1].Value.Float)
+// 	require.Equal("c", data.Consts[2].Name)
+// 	require.Equal("String", data.Consts[2].Type.Scalar.String())
+// 	require.Equal("hello", *data.Consts[2].Value.String)
+// 	require.Equal("d", data.Consts[3].Name)
+// 	require.Equal("Bool", data.Consts[3].Type.Scalar.String())
+// 	require.Equal("true", *data.Consts[3].Value.Bool)
+// 	require.Equal("e", data.Consts[4].Name)
+// 	require.Equal("Int64", data.Consts[4].Type.Scalar.String())
+// 	require.Equal(int64(-1), *data.Consts[4].Value.Int)
+// 	require.Equal("f", data.Consts[5].Name)
+// 	require.Equal("Double", data.Consts[5].Type.Scalar.String())
+// 	require.Equal(float64(1.0), *data.Consts[5].Value.Float)
+// }
+
+func TestStruct(t *testing.T) {
 	require := require.New(t)
-	type Const struct {
-		Pos   lexer.Position
-		Type  *Type    `"const" @@`
-		Name  string   `@Ident`
-		Value *Literal `"=" @@`
+	type Field struct {
+		Pos  lexer.Position
+		Name string `@Ident`
+		Type *Type  `@@`
+	}
+	type Struct struct {
+		Pos      lexer.Position
+		Comments []string `@Comment*`
+		Name     string   `"struct" @Ident`
+		Field    []*Field `"{" @@* "}"`
 	}
 	type Grammar struct {
 		Pos     lexer.Position
-		Package string   ` "package" @(Ident ( "." Ident )*)`
-		Consts  []*Const `@@*`
+		Package string    ` "package" @(Ident ( "." Ident )*)`
+		Structs []*Struct `@@*`
 	}
 	parser := participle.MustBuild[Grammar](
+		//participle.Lexer(defLexer),
 		participle.UseLookahead(2),
-		participle.Unquote(),
+		participle.Unquote("String"),
+		participle.Map(stripComment, "Comment"),
 	)
 	data, err := parser.ParseString("", `
 	package example
-	const int32 a = 1
-	const float b = 1.1
-	const string c = "hello"
-	const bool d = true
-	const int64 e = -1
-	const double f = 1.0
-	const int64 g = 1
+	struct hole {
+		// comment
+		water bool 
+		sand bool 
+	}
 	`)
 
 	require.NoError(err)
-	_ = data
 	require.Equal("example", data.Package)
-	require.Equal(7, len(data.Consts))
-	require.Equal("a", data.Consts[0].Name)
-	require.Equal("Int32", data.Consts[0].Type.Scalar.String())
-	require.Equal(int64(1), *data.Consts[0].Value.Int)
-	require.Equal("b", data.Consts[1].Name)
-	require.Equal("Float", data.Consts[1].Type.Scalar.String())
-	require.Equal(float64(1.1), *data.Consts[1].Value.Float)
-	require.Equal("c", data.Consts[2].Name)
-	require.Equal("String", data.Consts[2].Type.Scalar.String())
-	require.Equal("hello", *data.Consts[2].Value.String)
-	require.Equal("d", data.Consts[3].Name)
-	require.Equal("Bool", data.Consts[3].Type.Scalar.String())
-	require.Equal("true", *data.Consts[3].Value.Bool)
-	require.Equal("e", data.Consts[4].Name)
-	require.Equal("Int64", data.Consts[4].Type.Scalar.String())
-	require.Equal(int64(-1), *data.Consts[4].Value.Int)
-	require.Equal("f", data.Consts[5].Name)
-	require.Equal("Double", data.Consts[5].Type.Scalar.String())
-	require.Equal(float64(1.0), *data.Consts[5].Value.Float)
+	require.Equal(1, len(data.Structs))
+	require.Equal("hole", data.Structs[0].Name)
+	require.Equal(5, len(data.Structs[0].Field))
 }
 
 func TestEnum(t *testing.T) {

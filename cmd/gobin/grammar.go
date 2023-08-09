@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
@@ -17,20 +18,40 @@ var (
 		{"Punct", `[,.<>(){}=:]`},
 		{"Comment", `//.*`},
 	})
+	defLexer = lexer.Must(lexer.NewSimple([]lexer.SimpleRule{
+		{`CondOp`, `!=|<=|>=|==|[<>]|(\b(LIKE|IN)\b)`},
+		{`Ident`, `[a-z][a-zA-Z0-9_]*`},
+		{`Int`, `0|(-?[1-9][0-9]*)`},
+		{`Punctuation`, `\.|,`},
+		{`Float`, `-?[0-9]+\.[0-9]+`},
+		{`String`, `"[^"]*"`},
+		{`Brackets`, `\[|\]`},
+		{"Whitespace", `\s+`},
+		{"Comment", `(?:(?://|#)[^\n]*)|/\*.*?\*/`},
+	}))
 	parser = participle.MustBuild[Grammar](
 		//participle.Lexer(def),
+		//participle.Lexer(defLexer),
 		participle.Unquote(),
 		participle.UseLookahead(2),
 		//participle.Elide("Whitespace"),
 	)
 )
+var stripCommentRe = regexp.MustCompile(`^//\s*|^/\*|\*/$`)
+
+func stripComment(token lexer.Token) (lexer.Token, error) {
+	token.Value = stripCommentRe.ReplaceAllString(token.Value, "")
+	return token, nil
+}
 
 type Grammar struct {
 	Pos     lexer.Position
-	Package string     ` "package" @(Ident ( "." Ident )*)`
-	Option  []*Option  `@@*`
-	Consts  []*Const   `@@*`
-	Enum    []*Enum    `@@*`
+	Package string    ` "package" @(Ident ( "." Ident )*)`
+	Option  []*Option `@@*`
+	Consts  []*Const  `@@*`
+	Enum    []*Enum   `@@*`
+	Struct  []*Struct `@@*`
+
 	Message []*Message `@@*`
 	//Entries []*Entry `| ( @@ ";"* )*`
 }
@@ -57,6 +78,7 @@ type EnumValue struct {
 
 	Options []*Option `( "[" @@ ( "," @@ )* "]" )?`
 }
+
 type Scalar int
 
 const (
@@ -138,6 +160,12 @@ type MessageEntry struct {
 	Option  *Option  ` | "option" @@`
 	Message *Message ` | @@`
 	Field   *Field   ` | @@ ) ";"*`
+}
+
+type Struct struct {
+	Pos  lexer.Position
+	Name string   `"struct" @Ident`
+	Body []*Field `"{" @@* "}"`
 }
 
 type Field struct {

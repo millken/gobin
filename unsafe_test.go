@@ -15,6 +15,7 @@ func testA[T any](i T, m MarshallerFn[T], u UnmarshallerFn[T], nn int, r *requir
 	r.ErrorIs(err, ErrNotEnoughSpace)
 	r.Equal(0, n)
 }
+
 func TestUnsafe(t *testing.T) {
 	r := require.New(t)
 	t.Run("float32", func(t *testing.T) {
@@ -234,4 +235,17 @@ func TestUnsafe(t *testing.T) {
 		r.Equal(19, n)
 		r.Equal(bs, bs3)
 	})
+}
+
+type MUSA struct {
+	Name     string
+	BirthDay int64
+	Phone    string
+	Siblings int32
+	Spouse   bool
+	Money    float64
+}
+
+func MarshalMUS(v MUSA) (buf []byte) {
+	return nil
 }

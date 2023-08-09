@@ -13,3 +13,16 @@ const (
 var (
 	gag []byte = []byte{0x01, 0x02}
 )
+
+type A struct {
+	a int32
+	B struct {
+		b int32
+	}
+}
+
+func fff() {
+	var a A
+	a.a = 1
+
+}
