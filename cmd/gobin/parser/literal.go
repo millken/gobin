@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/alecthomas/participle/v2"
 )
 
@@ -8,6 +10,7 @@ var literalUnion = participle.Union[Literal](LiteralFloat{}, LiteralInt{}, Liter
 
 type Literal interface {
 	sealedLiteral()
+	GoString() string
 }
 
 type LiteralFloat struct {
@@ -15,18 +18,27 @@ type LiteralFloat struct {
 }
 
 func (literal LiteralFloat) sealedLiteral() {}
+func (literal LiteralFloat) GoString() string {
+	return fmt.Sprintf("%v", literal.Value)
+}
 
 type LiteralInt struct {
 	Value int `@Int`
 }
 
 func (literal LiteralInt) sealedLiteral() {}
+func (literal LiteralInt) GoString() string {
+	return fmt.Sprintf("%d", literal.Value)
+}
 
 type LiteralString struct {
 	Value string `@String`
 }
 
 func (literal LiteralString) sealedLiteral() {}
+func (literal LiteralString) GoString() string {
+	return fmt.Sprintf("\"%s\"", literal.Value)
+}
 
 type LiteralBool struct {
 	Value bool `@"true"`
@@ -34,12 +46,18 @@ type LiteralBool struct {
 }
 
 func (literal LiteralBool) sealedLiteral() {}
+func (literal LiteralBool) GoString() string {
+	return fmt.Sprintf("%v", literal.Value)
+}
 
 type LiteralNull struct {
 	Value bool `@"null"`
 }
 
 func (literal LiteralNull) sealedLiteral() {}
+func (literal LiteralNull) GoString() string {
+	return fmt.Sprintf("%v", literal.Value)
+}
 
 func LiteralExhaustiveSwitch(
 	literal Literal,

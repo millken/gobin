@@ -3,6 +3,7 @@ package gobin
 import (
 	"errors"
 	"math"
+	"strconv"
 	"unsafe"
 )
 
@@ -14,13 +15,13 @@ var (
 )
 
 func init() {
-	switch unsafe.Sizeof(int(0)) {
-	case 4:
+	switch strconv.IntSize {
+	case 32:
 		marshalInt = marshalInteger32[int]
 		unmarshalInt = unmarshalInteger32[int]
 		marshalUint = marshalInteger32[uint]
 		unmarshalUint = unmarshalInteger32[uint]
-	case 8:
+	case 64:
 		marshalInt = marshalInteger64[int]
 		unmarshalInt = unmarshalInteger64[int]
 		marshalUint = marshalInteger64[uint]

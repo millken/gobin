@@ -4,16 +4,18 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
+	"go/format"
 	"io"
 	"os"
 	"strings"
+
+	"gobin/parser"
 )
 
 type Parser struct {
 	buf    *bufio.Reader
 	out    *bytes.Buffer
-	parser *Grammar
+	parser *parser.FileTopLevel
 }
 
 func NewParser(out *bytes.Buffer, src any) (*Parser, error) {
@@ -49,83 +51,41 @@ func (p *Parser) Parse() error {
 	if err != nil {
 		return err
 	}
-	p.parser, err = parser.ParseBytes("", buf.Bytes())
+	parser, err := parser.ParseString(buf.String())
 	if err != nil {
 		return err
 	}
+	consts, structs := splitTopLevelDeclarations(parser.TopLevelDeclarations)
 	//parse package
-	if err := p.parsePackage(); err != nil {
+	if err := p.parsePackage(parser.Package.Identifier.String); err != nil {
 		return err
 	}
 	//parse option
 	//parse const
-	if err := p.parseConst(); err != nil {
-		return fmt.Errorf("parseConst error on %s:%d:%d: %s", p.parser.Pos.Filename, p.parser.Pos.Line, p.parser.Pos.Column, err)
+	if err := p.parseConst(consts); err != nil {
+		return err
 	}
-	//parse enum
-	//parse message
-	if err := p.parseMessage(); err != nil {
-		return fmt.Errorf("parseMessage error on %s:%d:%d: %s", p.parser.Pos.Filename, p.parser.Pos.Line, p.parser.Pos.Column, err)
+	//parse struct
+	if err := p.parseStruct(structs); err != nil {
+		return err
 	}
+	//format output
+	formatSrc, err := format.Source(p.out.Bytes())
+	if err != nil {
+		return err
+	}
+	p.out.Reset()
+	p.out.Write(formatSrc)
 	return nil
 }
-func (p *Parser) parsePackage() error {
-	err := prologTemplate.ExecuteTemplate(p.out, "prolog", p.parser.Package)
+func (p *Parser) parsePackage(name string) error {
+	err := prologTemplate.ExecuteTemplate(p.out, "prolog", name)
 	return err
 }
 
-func (p *Parser) parseMessage() error {
-	messages := p.parser.Message
-	var messageT struct {
-		Name   string
-		Fields []struct {
-			Name string
-			Type string
-			Tag  int
-		}
-	}
-	if len(messages) == 0 {
-		return nil
-	}
-	for _, m := range messages {
-		messageT.Name = m.Name
-		for _, f := range m.Entries {
-			var t string
-			switch f.Field.Type.Scalar {
-			case Int32:
-				t = "int32"
-			case Int64:
-				t = "int64"
-			case Uint32:
-				t = "uint32"
-			case Uint64:
-				t = "uint64"
-			case Float:
-				t = "float32"
-			case Double:
-				t = "float64"
-			case String:
-				t = "string"
-			case Bytes:
-				t = "[]byte"
-			case Bool:
-				t = "bool"
-				// case Message:
-				// 	t = f.Type.Name
-				// case Enum:
-				// 	t = f.Type.Name
-			}
-			messageT.Fields = append(messageT.Fields, struct {
-				Name string
-				Type string
-				Tag  int
-			}{
-				Name: f.Field.Name,
-				Type: t,
-				Tag:  f.Field.Tag,
-			})
-		}
-		if err := messageTemplate.ExecuteTemplate(p.out, "message", messageT); err != nil {
+func (p *Parser) parseStruct(structs []parser.Struct) error {
+	if len(structs) > 0 {
+		if err := structTemplate.ExecuteTemplate(p.out, "struct", structs); err != nil {
 			return err
 		}
 	}
@@ -137,61 +97,7 @@ func (p *Parser) parseOption() error {
 	return nil
 }
 
-func (p *Parser) parseConst() error {
-	type constT struct {
-		Name  string
-		Type  string
-		Value string
-	}
-	var consts []constT
-	constNameExist := func(name string) bool {
-		for _, c := range consts {
-			if c.Name == name {
-				return true
-			}
-		}
-		return false
-	}
-	for _, c := range p.parser.Consts {
-		if constNameExist(c.Name) {
-			return fmt.Errorf("const name %s already exist", c.Name)
-		}
-		var t string
-		var v string
-		switch c.Type.Scalar {
-		case Int32:
-			t = "int32"
-			v = fmt.Sprintf("%d", *c.Value.Int)
-		case Int64:
-			t = "int64"
-			v = fmt.Sprintf("%d", *c.Value.Int)
-		case Uint32:
-			t = "uint32"
-			v = fmt.Sprintf("%d", *c.Value.Int)
-		case Uint64:
-			t = "uint64"
-			v = fmt.Sprintf("%d", *c.Value.Int)
-		case Float:
-			t = "float32"
-			v = fmt.Sprintf("%f", *c.Value.Float)
-		case Double:
-			t = "float64"
-			v = fmt.Sprintf("%f", *c.Value.Float)
-		case String:
-			t = "string"
-			v = fmt.Sprintf(`"%s"`, *c.Value.String)
-		case Bool:
-			t = "bool"
-			v = fmt.Sprintf("%v", *c.Value.Bool)
-		default:
-			return errors.New("invalid type")
-		}
-		consts = append(consts, constT{
-			Name:  c.Name,
-			Type:  t,
-			Value: v,
-		})
-	}
+func (p *Parser) parseConst(consts []parser.Const) error {
 	if len(consts) > 0 {
 		err := constTemplate.ExecuteTemplate(p.out, "const", consts)
 		if err != nil {
@@ -199,4 +105,21 @@ func (p *Parser) parseConst() error {
 		}
 	}
 	return nil
+}
+
+func splitTopLevelDeclarations(topLevelDeclarations []parser.TopLevelDeclaration) ([]parser.Const, []parser.Struct) {
+	consts := []parser.Const{}
+	structs := []parser.Struct{}
+	for _, topLevelDeclaration := range topLevelDeclarations {
+		parser.TopLevelDeclarationExhaustiveSwitch(
+			topLevelDeclaration,
+			func(topLevelDeclaration parser.Const) {
+				consts = append(consts, topLevelDeclaration)
+			},
+			func(topLevelDeclaration parser.Struct) {
+				structs = append(structs, topLevelDeclaration)
+			},
+		)
+	}
+	return consts, structs
 }
