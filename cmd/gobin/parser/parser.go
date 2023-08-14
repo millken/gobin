@@ -82,9 +82,15 @@ func (s Struct) sealedTopLevelDeclaration() {}
 
 func TopLevelDeclarationExhaustiveSwitch(
 	topLevelDeclaration TopLevelDeclaration,
+	caseOption func(topLevelDeclaration Option),
 	caseConst func(topLevelDeclaration Const),
 	caseStruct func(topLevelDeclaration Struct),
 ) {
+	opt, ok := topLevelDeclaration.(Option)
+	if ok {
+		caseOption(opt)
+		return
+	}
 	cons, ok := topLevelDeclaration.(Const)
 	if ok {
 		caseConst(cons)
@@ -96,24 +102,3 @@ func TopLevelDeclarationExhaustiveSwitch(
 		return
 	}
 }
-
-// func splitTopLevelDeclarations(topLevelDeclarations []parser.TopLevelDeclaration) ([]parser.Declaration, []parser.Interface, []parser.Struct) {
-// 	declarations := []parser.Declaration{}
-// 	interfaces := []parser.Interface{}
-// 	structs := []parser.Struct{}
-// 	for _, topLevelDeclaration := range topLevelDeclarations {
-// 		parser.TopLevelDeclarationExhaustiveSwitch(
-// 			topLevelDeclaration,
-// 			func(topLevelDeclaration parser.Declaration) {
-// 				declarations = append(declarations, topLevelDeclaration)
-// 			},
-// 			func(topLevelDeclaration parser.Interface) {
-// 				interfaces = append(interfaces, topLevelDeclaration)
-// 			},
-// 			func(topLevelDeclaration parser.Struct) {
-// 				structs = append(structs, topLevelDeclaration)
-// 			},
-// 		)
-// 	}
-// 	return declarations, interfaces, structs
-// }

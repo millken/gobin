@@ -16,11 +16,12 @@ type Parser struct {
 	buf    *bufio.Reader
 	out    *bytes.Buffer
 	parser *parser.FileTopLevel
+	option map[string]parser.Literal
 }
 
 func NewParser(out *bytes.Buffer, src any) (*Parser, error) {
 	var err error
-	p := &Parser{out: out}
+	p := &Parser{out: out, option: make(map[string]parser.Literal)}
 	if src != nil {
 		switch s := src.(type) {
 		case string:
@@ -55,12 +56,15 @@ func (p *Parser) Parse() error {
 	if err != nil {
 		return err
 	}
-	consts, structs := splitTopLevelDeclarations(parser.TopLevelDeclarations)
+	options, consts, structs := splitTopLevelDeclarations(parser.TopLevelDeclarations)
 	//parse package
 	if err := p.parsePackage(parser.Package.Identifier.String); err != nil {
 		return err
 	}
 	//parse option
+	if err := p.parseOption(options); err != nil {
+		return err
+	}
 	//parse const
 	if err := p.parseConst(consts); err != nil {
 		return err
@@ -85,7 +89,7 @@ func (p *Parser) parsePackage(name string) error {
 
 func (p *Parser) parseStruct(structs []parser.Struct) error {
 	if len(structs) > 0 {
-		if err := structTemplate.ExecuteTemplate(p.out, "struct", structs); err != nil {
+		if err := structTemplate.ExecuteTemplate(p.out, "struct", map[string]any{"Structs": structs, "Options": p.option}); err != nil {
 			return err
 		}
 	}
@@ -93,7 +97,10 @@ func (p *Parser) parseStruct(structs []parser.Struct) error {
 	return nil
 }
 
-func (p *Parser) parseOption() error {
+func (p *Parser) parseOption(options []parser.Option) error {
+	for _, option := range options {
+		p.option[option.Name.String] = option.Value
+	}
 	return nil
 }
 
@@ -107,12 +114,16 @@ func (p *Parser) parseConst(consts []parser.Const) error {
 	return nil
 }
 
-func splitTopLevelDeclarations(topLevelDeclarations []parser.TopLevelDeclaration) ([]parser.Const, []parser.Struct) {
+func splitTopLevelDeclarations(topLevelDeclarations []parser.TopLevelDeclaration) ([]parser.Option, []parser.Const, []parser.Struct) {
+	options := []parser.Option{}
 	consts := []parser.Const{}
 	structs := []parser.Struct{}
 	for _, topLevelDeclaration := range topLevelDeclarations {
 		parser.TopLevelDeclarationExhaustiveSwitch(
 			topLevelDeclaration,
+			func(topLevelDeclaration parser.Option) {
+				options = append(options, topLevelDeclaration)
+			},
 			func(topLevelDeclaration parser.Const) {
 				consts = append(consts, topLevelDeclaration)
 			},
@@ -121,5 +132,5 @@ func splitTopLevelDeclarations(topLevelDeclarations []parser.TopLevelDeclaration
 			},
 		)
 	}
-	return consts, structs
+	return options, consts, structs
 }

@@ -32,6 +32,15 @@ func TestParser(t *testing.T) {
 	  struct SearchResponse {
 		string results
 	  }
+	struct A {
+		string Name
+		uint64 BirthDay
+		bytes Phone
+		int32 Siblings
+		bool Spouse
+
+		double Money
+	}
 	`
 	p, err := NewParser(out, src)
 	assert.NoError(t, err)

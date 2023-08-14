@@ -44,19 +44,25 @@ var (
 			var ret string
 			for _, f := range fields {
 				if v, ok := typeToString[*f.Type]; ok {
-					ret += fmt.Sprintf(`i += gobin.Marshal%s(o.%s, data[i:])
+					ret += fmt.Sprintf(`if n, err = o.Marshal%s(o.%s, data[offset:]); err != nil {
+						return nil, err
+					}
+					offset += n
 `, v, f.Name.String)
 				} else {
 					panic("unknown type")
 				}
 			}
+			ret += `	if offset != sz {
+				return nil, fmt.Errorf("%s size / offset different %d : %d", "Marshal", sz, offset)
+			}`
 			return ret
 		},
 		"StructFieldUnmarshal": func(fields []parser.StructField) string {
 			var ret string
 			for _, f := range fields {
 				if v, ok := typeToString[*f.Type]; ok {
-					ret += fmt.Sprintf(`if o.%s, i, err = gobin.Unmarshal%s(data[n:]); err != nil {
+					ret += fmt.Sprintf(`if o.%s, i, err = o.Unmarshal%s(data[n:]); err != nil {
 						return err
 					}
 					n += i
@@ -73,6 +79,7 @@ var (
 package {{ . }}
 
 import (
+	"fmt"
 	"github.com/millken/gobin"
 )
 `))
@@ -100,20 +107,24 @@ func init() {
 		structTemplateTmp.Funcs(f)
 	}
 	structTemplate = template.Must(structTemplateTmp.Parse(`
-{{- range .}}
+{{- range .Structs}}
 type {{.Name.String}} struct {
+	gobin.{{with $.Options.go_marshal}}{{if eq .Value "unsafe"}}Unsafe{{else}}Safe{{end}}{{end}}
 {{- range .Fields}}
 	{{.Name.String}} {{.Type.GoString}}
 {{- end}}
 }
+
+// MarshalBinary encodes o as conform encoding.BinaryMarshaler.
 func (o *{{.Name.String}}) MarshalBinary() (data []byte, err error) {
 	sz := {{.Fields | StructFieldLength}}
 	data = make([]byte, sz)
-	var i int
+	var offset, n int
 	{{.Fields | StructFieldMarshal}}
 	return data, nil
 }
 
+// Unmarshal decodes data as conform encoding.BinaryUnmarshaler.
 func (o *{{.Name.String}}) UnmarshalBinary(data []byte) error {
 	var (
 		i, n int

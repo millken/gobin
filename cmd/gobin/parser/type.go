@@ -47,7 +47,7 @@ func (t Type) Size() int {
 		return 8
 	case Float, Int32, Uint32:
 		return 4
-	case Int, Int8, Uint, Uint8:
+	case Bool, Int, Int8, Uint, Uint8:
 		return 1
 	case Int16, Uint16:
 		return 2

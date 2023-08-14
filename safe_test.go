@@ -7,18 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testA[T any](i T, m MarshallerFn[T], u UnmarshallerFn[T], nn int, r *require.Assertions) {
-	bs := make([]byte, 1)
-	n, err := m(i, bs)
-	r.ErrorIs(err, ErrNotEnoughSpace)
-	_, n, err = u(bs)
-	r.ErrorIs(err, ErrNotEnoughSpace)
-	r.Equal(0, n)
-}
-
-func TestUnsafe(t *testing.T) {
+func TestSafe(t *testing.T) {
 	r := require.New(t)
-	v := Unsafe{}
+	v := Safe{}
 	t.Run("float32", func(t *testing.T) {
 		var tests = []struct {
 			f float32

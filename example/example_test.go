@@ -44,6 +44,25 @@ func TestSearchResponse(t *testing.T) {
 	assert.Equal(t, a, b)
 }
 
+func TestA(t *testing.T) {
+	a := &A{
+		Name:     "hello",
+		BirthDay: 33,
+		Phone:    []byte("123"),
+		Siblings: 44,
+		Spouse:   true,
+		Money:    1444.12324,
+		//Children: []string{"a", "b"},
+	}
+	data, err := a.MarshalBinary()
+	t.Logf("%x", data)
+	assert.NoError(t, err)
+	b := &A{}
+	err = b.UnmarshalBinary(data)
+	assert.NoError(t, err)
+	assert.Equal(t, a, b)
+}
+
 /*
 BenchmarkSearchRequest-8   	 7282776	       141.0 ns/op	      48 B/op	       2 allocs/op 2023/8/13
 */
