@@ -1,1 +1,0 @@
-https://github.com/xplosunn/tenecs/blob/main/codegen/codegen.go#L370

@@ -1,11 +1,52 @@
 package example
 
 import (
+	"bytes"
+	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
 )
 
+func Equal[T comparable](t *testing.T, expected, actual T) {
+	t.Helper()
+
+	if expected != actual {
+		t.Errorf("want: %v; got: %v", expected, actual)
+	}
+}
+
+// ObjectsAreEqual determines if two objects are considered equal.
+//
+// This function does no assertion of any kind.
+func ObjectsAreEqual(expected, actual interface{}) bool {
+	if expected == nil || actual == nil {
+		return expected == actual
+	}
+
+	exp, ok := expected.([]byte)
+	if !ok {
+		return reflect.DeepEqual(expected, actual)
+	}
+
+	act, ok := actual.([]byte)
+	if !ok {
+		return false
+	}
+	if exp == nil || act == nil {
+		return exp == nil && act == nil
+	}
+	return bytes.Equal(exp, act)
+}
+func NoError(t *testing.T, err error, msgAndArgs ...interface{}) bool {
+	t.Helper()
+	if err != nil {
+		t.Errorf(fmt.Sprintf("Received unexpected error:\n%+v", err), msgAndArgs...)
+		return false
+	}
+	return true
+}
 func TestSearchRequest(t *testing.T) {
 	a := &SearchRequest{
 		query:           "hello",
@@ -13,17 +54,13 @@ func TestSearchRequest(t *testing.T) {
 		result_per_page: 10,
 	}
 	data, err := a.MarshalBinary()
-	if err != nil {
-		t.Fatal(err)
-	}
+	NoError(t, err)
 	t.Log(data)
 	b := &SearchRequest{}
 	err = b.UnmarshalBinary(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	NoError(t, err)
 	t.Log(b)
-	assert.Equal(t, a, b)
+	Equal(t, a, b)
 }
 
 func TestSearchResponse(t *testing.T) {
@@ -31,17 +68,13 @@ func TestSearchResponse(t *testing.T) {
 		results: "hello",
 	}
 	data, err := a.MarshalBinary()
-	if err != nil {
-		t.Fatal(err)
-	}
+	NoError(t, err)
 	t.Log(data)
 	b := &SearchResponse{}
 	err = b.UnmarshalBinary(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	NoError(t, err)
 	t.Log(b)
-	assert.Equal(t, a, b)
+	Equal(t, a, b)
 }
 
 func TestA(t *testing.T) {
