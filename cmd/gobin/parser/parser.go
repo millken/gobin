@@ -1,6 +1,9 @@
 package parser
 
 import (
+	"regexp"
+	"text/scanner"
+
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
 )
@@ -25,8 +28,34 @@ func ParseString(input string) (*FileTopLevel, error) {
 	return ast, nil
 }
 
+func ParseBytes(input []byte) (*FileTopLevel, error) {
+	p, err := parser()
+	if err != nil {
+		return nil, err
+	}
+	ast, err := p.ParseBytes("", input)
+	if err != nil {
+		return nil, err
+	}
+	return ast, nil
+}
+
 func parser() (*participle.Parser[FileTopLevel], error) {
-	return participle.Build[FileTopLevel](topLevelDeclarationUnion, literalUnion, participle.Unquote())
+	lex := lexer.NewTextScannerLexer(func(s *scanner.Scanner) {
+		s.Mode = scanner.ScanIdents | scanner.ScanFloats | scanner.ScanChars | scanner.ScanStrings | scanner.ScanRawStrings | scanner.ScanComments
+	})
+	return participle.Build[FileTopLevel](participle.Lexer(lex),
+		topLevelDeclarationUnion,
+		literalUnion,
+		participle.Map(stripComment, "Comment"), // for multi language
+		participle.Unquote())
+}
+
+var stripCommentRe = regexp.MustCompile(`^//\s*|^/\*|\*/$`)
+
+func stripComment(token lexer.Token) (lexer.Token, error) {
+	token.Value = stripCommentRe.ReplaceAllString(token.Value, "")
+	return token, nil
 }
 
 type Node struct {
@@ -48,34 +77,63 @@ type TopLevelDeclaration interface {
 }
 
 type Package struct {
-	Identifier Name `"package" @@`
+	Comments   string `@Comment?`
+	Identifier Name   `"package" @@`
 }
 
-var topLevelDeclarationUnion = participle.Union[TopLevelDeclaration](Option{}, Struct{}, Const{})
+var topLevelDeclarationUnion = participle.Union[TopLevelDeclaration](Option{}, Struct{}, Const{}, Enum{})
 
 type Option struct {
-	Name  Name    `"option" @@`
-	Value Literal `"=" @@`
+	Comments string  `@Comment?`
+	Name     Name    `"option" @@`
+	Value    Literal `"=" @@`
 }
 
 func (o Option) sealedTopLevelDeclaration() {}
 
 type Const struct {
-	Type  *Type   `"const" @@`
-	Name  Name    `@@`
-	Value Literal `"=" @@`
+	Comments string  `@Comment?`
+	Type     *Type   `"const" @@`
+	Name     Name    `@@`
+	Value    Literal `"=" @@`
 }
 
 func (c Const) sealedTopLevelDeclaration() {}
 
+type Enum struct {
+	Comments string      `@Comment?`
+	Name     Name        `"enum" @@`
+	Values   []EnumValue `"{" @@* "}"`
+}
+
+func (c Enum) sealedTopLevelDeclaration() {}
+
+type EnumValue struct {
+	Comments string `@Comment?`
+	Value    string `@Ident`
+}
+
 type Struct struct {
-	Name   Name          `"struct" @@`
-	Fields []StructField `"{" @@* "}"`
+	Comments string        `@Comment?`
+	Name     Name          `"struct" @@`
+	Fields   []StructField `"{" @@* "}"`
 }
 
 type StructField struct {
-	Type *Type `@@`
-	Name Name  `@@`
+	Comments string          `@Comment?`
+	Type     *StructType     `@@`
+	Name     Name            `@@`
+	Options  []*StructOption `( "[" @@ ( "," @@ )* "]" )?`
+}
+
+type StructType struct {
+	Type      *Type   `@@`
+	Reference *string `| @Ident`
+}
+
+type StructOption struct {
+	Name  string  `( "(" @Ident @( "." Ident )* ")" | @Ident @( "." @Ident )* )`
+	Value Literal `"=" @@`
 }
 
 func (s Struct) sealedTopLevelDeclaration() {}
@@ -84,6 +142,7 @@ func TopLevelDeclarationExhaustiveSwitch(
 	topLevelDeclaration TopLevelDeclaration,
 	caseOption func(topLevelDeclaration Option),
 	caseConst func(topLevelDeclaration Const),
+	caseEnum func(topLevelDeclaration Enum),
 	caseStruct func(topLevelDeclaration Struct),
 ) {
 	opt, ok := topLevelDeclaration.(Option)
@@ -94,6 +153,11 @@ func TopLevelDeclarationExhaustiveSwitch(
 	cons, ok := topLevelDeclaration.(Const)
 	if ok {
 		caseConst(cons)
+		return
+	}
+	enum, ok := topLevelDeclaration.(Enum)
+	if ok {
+		caseEnum(enum)
 		return
 	}
 	struc, ok := topLevelDeclaration.(Struct)

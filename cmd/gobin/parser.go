@@ -12,16 +12,32 @@ import (
 	"gobin/parser"
 )
 
+type option func(*Parser) error
+
+func WithFormatted() option {
+	return func(p *Parser) error {
+		p.formatted = true
+		return nil
+	}
+}
+
 type Parser struct {
 	buf    *bufio.Reader
 	out    *bytes.Buffer
 	parser *parser.FileTopLevel
 	option map[string]parser.Literal
+
+	formatted bool
 }
 
-func NewParser(out *bytes.Buffer, src any) (*Parser, error) {
+func NewParser(out *bytes.Buffer, src any, opts ...option) (*Parser, error) {
 	var err error
 	p := &Parser{out: out, option: make(map[string]parser.Literal)}
+	for _, opt := range opts {
+		if err = opt(p); err != nil {
+			return nil, err
+		}
+	}
 	if src != nil {
 		switch s := src.(type) {
 		case string:
@@ -56,30 +72,40 @@ func (p *Parser) Parse() error {
 	if err != nil {
 		return err
 	}
-	options, consts, structs := splitTopLevelDeclarations(parser.TopLevelDeclarations)
+	options, consts, enums, structs := splitTopLevelDeclarations(parser.TopLevelDeclarations)
 	//parse package
 	if err := p.parsePackage(parser.Package.Identifier.String); err != nil {
-		return err
+		return errors.New("parsePackage error: " + err.Error())
 	}
 	//parse option
 	if err := p.parseOption(options); err != nil {
-		return err
+		return errors.New("parseOption error: " + err.Error())
 	}
 	//parse const
 	if err := p.parseConst(consts); err != nil {
-		return err
+		return errors.New("parseConst error: " + err.Error())
+	}
+
+	// parse enum
+	if err := p.parseEnum(enums); err != nil {
+		return errors.New("parseEnum error: " + err.Error())
 	}
 	//parse struct
 	if err := p.parseStruct(structs); err != nil {
-		return err
+		return errors.New("parseStruct error: " + err.Error())
 	}
-	//format output
-	formatSrc, err := format.Source(p.out.Bytes())
-	if err != nil {
-		return err
+	if p.formatted {
+		//format output
+		formatSrc, err := format.Source(p.out.Bytes())
+		if err != nil {
+			return errors.New("format error: " + err.Error())
+		}
+		p.out.Reset()
+		p.out.Write(formatSrc)
+	} else {
+		p.out.Write([]byte("\n"))
 	}
-	p.out.Reset()
-	p.out.Write(formatSrc)
+
 	return nil
 }
 func (p *Parser) parsePackage(name string) error {
@@ -106,7 +132,7 @@ func (p *Parser) parseOption(options []parser.Option) error {
 
 func (p *Parser) parseConst(consts []parser.Const) error {
 	if len(consts) > 0 {
-		err := constTemplate.ExecuteTemplate(p.out, "const", consts)
+		err := constTemplate.ExecuteTemplate(p.out, "const", map[string]any{"Consts": consts, "Options": p.option})
 		if err != nil {
 			return err
 		}
@@ -114,10 +140,23 @@ func (p *Parser) parseConst(consts []parser.Const) error {
 	return nil
 }
 
-func splitTopLevelDeclarations(topLevelDeclarations []parser.TopLevelDeclaration) ([]parser.Option, []parser.Const, []parser.Struct) {
+func (p *Parser) parseEnum(enums []parser.Enum) error {
+	if len(enums) > 0 {
+		err := enumTemplate.ExecuteTemplate(p.out, "enum", map[string]any{"Enums": enums, "Options": p.option})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func splitTopLevelDeclarations(topLevelDeclarations []parser.TopLevelDeclaration) ([]parser.Option, []parser.Const, []parser.Enum, []parser.Struct) {
 	options := []parser.Option{}
 	consts := []parser.Const{}
 	structs := []parser.Struct{}
+	enums := []parser.Enum{}
+	UpperFirst := func(s string) string {
+		return strings.ToUpper(s[:1]) + s[1:]
+	}
 	for _, topLevelDeclaration := range topLevelDeclarations {
 		parser.TopLevelDeclarationExhaustiveSwitch(
 			topLevelDeclaration,
@@ -127,10 +166,23 @@ func splitTopLevelDeclarations(topLevelDeclarations []parser.TopLevelDeclaration
 			func(topLevelDeclaration parser.Const) {
 				consts = append(consts, topLevelDeclaration)
 			},
+			func(topLevelDeclaration parser.Enum) {
+				topLevelDeclaration.Name.String = UpperFirst(topLevelDeclaration.Name.String)
+				for i, field := range topLevelDeclaration.Values {
+					field.Value = UpperFirst(field.Value)
+					topLevelDeclaration.Values[i] = field
+				}
+				enums = append(enums, topLevelDeclaration)
+			},
 			func(topLevelDeclaration parser.Struct) {
+				topLevelDeclaration.Name.String = UpperFirst(topLevelDeclaration.Name.String)
+				for i, field := range topLevelDeclaration.Fields {
+					field.Name.String = UpperFirst(field.Name.String)
+					topLevelDeclaration.Fields[i] = field
+				}
 				structs = append(structs, topLevelDeclaration)
 			},
 		)
 	}
-	return options, consts, structs
+	return options, consts, enums, structs
 }

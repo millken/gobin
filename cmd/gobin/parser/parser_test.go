@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	"os"
 	"testing"
 
 	"gobin/parser"
@@ -31,9 +32,20 @@ func TestParseString(t *testing.T) {
 func TestPackage(t *testing.T) {
 	data, err := parser.ParseString(`
   package example
+  //comment 1
   option go_marshal = "unsafe"
+  /* 
+  comment 2
+  abc
+  */
   option go_int = 3
+
+  //comment 12
   const int32 a = 1
+  /*
+multi line comment
+multi line comment
+  */
   const float b = 1.1
   struct Foo {
 	int32 a
@@ -65,25 +77,73 @@ func TestPackage(t *testing.T) {
 	assert.Equal[string](t, "Foo", stru.Name.String)
 	assert.Equal[int](t, 2, len(stru.Fields))
 	assert.Equal[string](t, "a", stru.Fields[0].Name.String)
-	assert.Equal[parser.Type](t, parser.Int32, *stru.Fields[0].Type)
+	assert.Equal[parser.Type](t, parser.Int32, *stru.Fields[0].Type.Type)
 	assert.Equal[string](t, "b", stru.Fields[1].Name.String)
-	assert.Equal[parser.Type](t, parser.Float, *stru.Fields[1].Type)
+	assert.Equal[parser.Type](t, parser.Float, *stru.Fields[1].Type.Type)
+}
 
+func TestSchema(t *testing.T) {
+	data, err := parser.ParseString(`
+  package example
+  struct hole  {
+	// Lat is the latitude of the cup.
+	double lat
+	// Lon is the longitude of the cup.
+	double lon
+	// Par is the difficulty index.
+	uint8 par
+	// Water marks the presence of water.
+	bool water 
+	// Sand marks the presence of sand.
+	bool sand 
+}
+  // Course is the grounds where the game of golf is played.
+  struct course  {
+	uint64 ID    
+	string name
+    hole holes [repeated = true] 
+	bytes image  
+    string tags  [repeated = true]
+}
+	`)
+	assert.NoError(t, err)
+	assert.Equal(t, "example", data.Package.Identifier.String)
+	idx := 0
+	idx++
+}
+
+func TestPebble(t *testing.T) {
+	input, err := os.ReadFile("../testdata/pebble.gobin")
+	assert.NoError(t, err)
+	data, err := parser.ParseBytes(input)
+	assert.NoError(t, err)
+	assert.Equal(t, "pebble", data.Package.Identifier.String)
+	idx := 0
+	enum := data.TopLevelDeclarations[idx].(parser.Enum)
+	assert.Equal[string](t, "PackageType", enum.Name.String)
+	assert.Equal[int](t, 3, len(enum.Values))
+	assert.Equal[string](t, "DATA", enum.Values[0].Value)
+	assert.Equal[string](t, "CONFIG", enum.Values[1].Value)
+	assert.Equal[string](t, "STATE", enum.Values[2].Value)
 }
 
 func TestParserGrammar(t *testing.T) {
 	expected := `FileTopLevel = Package TopLevelDeclaration* .
-Package = "package" Name .
+Package = <comment>* "package" Name .
 Name = <ident> .
-TopLevelDeclaration = Struct | Const .
-Struct = "struct" Name ("<" (Name ("," Name)*)? ">")? .
-Const = "const" Type Name "=" Literal .
+TopLevelDeclaration = Option | Struct | Const .
+Option = <comment>* "option" Name "=" Literal .
 Literal = LiteralFloat | LiteralInt | LiteralString | LiteralBool | LiteralNull .
 LiteralFloat = <float> .
 LiteralInt = <int> .
 LiteralString = <string> .
 LiteralBool = "true" | "false" .
-LiteralNull = "null" .`
+LiteralNull = "null" .
+Struct = <comment>* "struct" Name "{" StructField* "}" .
+StructField = <comment>* StructType Name ("[" StructOption ("," StructOption)* "]")? .
+StructType = Type | <ident> .
+StructOption = (("(" <ident> ("." <ident>)* ")") | (<ident> ("." <ident>)*)) "=" Literal .
+Const = <comment>* "const" Type Name "=" Literal .`
 	grammar, err := parser.Grammar()
 	//t.Log(grammar)
 	assert.NoError(t, err)

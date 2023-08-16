@@ -15,6 +15,16 @@ var (
 	gag []byte = []byte{0x01, 0x02}
 )
 
+// PackageType is the type of package
+type PackageType uint16
+
+const (
+	// DATA is a data package
+	PackageType_DATA   PackageType = 0
+	PackageType_CONFIG PackageType = 1
+	PackageType_STATE  PackageType = 2
+)
+
 type A struct {
 	a int32
 	B struct {

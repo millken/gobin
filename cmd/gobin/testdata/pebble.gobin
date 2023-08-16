@@ -1,0 +1,16 @@
+package example
+// PackageType is the type of package
+enum PackageType {
+    // DATA is a data package
+    DATA
+    CONFIG 
+    STATE
+}
+
+struct binPackage
+{
+    PackageType type
+    bytes data
+    uint32 timestamp
+    bytes signature
+}
