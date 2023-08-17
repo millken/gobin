@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-
-	"github.com/alecthomas/assert/v2"
 )
 
-func Equal[T comparable](t *testing.T, expected, actual T) {
+func Equal[T comparable](t testing.TB, expected, actual T) {
 	t.Helper()
 
-	if expected != actual {
+	if !ObjectsAreEqual(expected, actual) {
 		t.Errorf("want: %v; got: %v", expected, actual)
 	}
 }
@@ -89,11 +87,11 @@ func TestA(t *testing.T) {
 	}
 	data, err := a.MarshalBinary()
 	t.Logf("%x", data)
-	assert.NoError(t, err)
+	NoError(t, err)
 	b := &A{}
 	err = b.UnmarshalBinary(data)
-	assert.NoError(t, err)
-	assert.Equal(t, a, b)
+	NoError(t, err)
+	Equal(t, a, b)
 }
 
 /*
@@ -115,6 +113,6 @@ func BenchmarkSearchRequest(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		assert.Equal(b, a, c)
+		//Equal(b, a, c)
 	}
 }

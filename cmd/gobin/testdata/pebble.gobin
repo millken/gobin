@@ -14,3 +14,41 @@ struct binPackage
     uint32 timestamp
     bytes signature
 }
+
+struct SensorData
+{
+ uint32 snr
+ uint32 vbat
+ int32 latitude
+ int32 longitude
+ uint32 gasResistance
+ int32 temperature
+ uint32 pressure
+ uint32 humidity
+ uint32 light
+ uint32 temperature2
+ int32 gyroscope [repeated = true]
+ int32 accelerometer [repeated = true]
+ string random
+}
+
+struct SensorConfig
+{
+    uint32 bulkUpload
+    uint32 dataChannel
+    uint32 uploadPeriod
+    uint32 bulkUploadSamplingCnt
+    uint32 bulkUploadSamplingFreq
+    uint32 beep
+    string firmware
+    bool deviceConfigurable
+}
+
+struct SensorState
+{
+    uint32 state
+}
+
+struct SensorConfirm {
+    string owner
+}

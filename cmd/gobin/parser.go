@@ -164,6 +164,7 @@ func splitTopLevelDeclarations(topLevelDeclarations []parser.TopLevelDeclaration
 				options = append(options, topLevelDeclaration)
 			},
 			func(topLevelDeclaration parser.Const) {
+				topLevelDeclaration.Name.String = UpperFirst(topLevelDeclaration.Name.String)
 				consts = append(consts, topLevelDeclaration)
 			},
 			func(topLevelDeclaration parser.Enum) {

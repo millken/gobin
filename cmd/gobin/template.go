@@ -76,7 +76,11 @@ var (
 			var ret string
 			for _, f := range fields {
 				if f.Type.Type == nil {
-					// reference to another struct
+					ret += fmt.Sprintf(`if i, err = o.%s.UnmarshalTo(data[n:]); err != nil {
+						return err
+					}
+					n += i
+					`, f.Name.String)
 					continue
 				}
 				if v, ok := typeToString[*f.Type.Type]; ok {
@@ -176,6 +180,15 @@ func init() {
 		return 2, nil
 	}
 
+	// UnmarshalTo reads a wire-format message from data.
+func (o *{{$parent.Name.String}}) UnmarshalTo(data []byte) (int, error) {
+	if len(data) < 2 {
+		return 0, fmt.Errorf("invalid data size %d", len(data))
+	}
+	*o = PackageType(uint16(data[0]) | uint16(data[1])<<8)
+	return 2, nil
+}
+
 	// MarshalBinary encodes o as conform encoding.BinaryMarshaler.
 	func (o *{{$parent.Name.String}}) MarshalBinary() ([]byte,error) {
 		data := make([]byte, 2)
@@ -185,11 +198,8 @@ func init() {
 
 	// Unmarshal decodes data as conform encoding.BinaryUnmarshaler.
 func (o *{{$parent.Name.String}}) UnmarshalBinary(data []byte) error {
-	if len(data) < 2 {
-		return fmt.Errorf("invalid data size %d", len(data))
-	}
-	*o = {{$parent.Name.String}}(uint16(data[0]) | uint16(data[1])<<8)
-	return nil
+	_, err := o.UnmarshalTo(data)
+	return err
 }
 	{{- end }}
 	`))
