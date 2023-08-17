@@ -10,6 +10,7 @@ import (
 
 //nolint:gochecknoglobals
 var (
+	IntSize      = strconv.IntSize / 8
 	typeToString = map[parser.Type]string{
 		parser.String: "String",
 		parser.Int:    "Int",
@@ -28,67 +29,184 @@ var (
 		parser.Bytes:  "Bytes",
 	}
 	funcMap = []template.FuncMap{map[string]interface{}{
+		"StructFieldGetOption": func(name string, fields []*parser.StructOption) *parser.Literal {
+			return getOption(name, fields)
+		},
+		"StructFieldIsRepeat": func(opts []*parser.StructOption) bool {
+			if opts == nil {
+				return false
+			}
+			opt := getOption("repeated", opts)
+			return isBool(opt)
+		},
+		"StructOptionIsBool": func(opt *parser.Literal) bool {
+			return isBool(opt)
+		},
 		"StructFieldLength": func(fields []parser.StructField) string {
 			var n int
 			var ret string
 			for _, f := range fields {
+				opt := getOption("repeated", f.Options)
+				repeated := isBool(opt)
 				if f.Type.Type == nil {
-					// reference to another struct
-					ret += fmt.Sprintf(`o.%s.Size() + `, f.Name.String)
+					if repeated {
+						//array
+						ret += fmt.Sprintf(`
+						for _, v := range o.%s {
+							sz += v.Size()
+						}`, f.Name.String)
+
+						//n is length of array
+						//length + array
+						n += IntSize
+					} else {
+						// reference to another struct
+						ret += fmt.Sprintf(`
+						sz += o.%s.Size()`, f.Name.String)
+					}
 					continue
 				}
 				if sz := f.Type.Type.Size(); sz > 0 {
-					n += sz
+					if repeated {
+						//array
+						ret += fmt.Sprintf(`
+						sz += len(o.%s) * %d`, f.Name.String, sz)
+						//n is length of array
+						//length + array
+						n += IntSize
+					} else {
+						n += sz
+					}
+
 				} else {
-					ret += fmt.Sprintf(`len(o.%s) + `, f.Name.String)
-					n += strconv.IntSize / 8
+					if repeated {
+						n += IntSize
+						ret += fmt.Sprintf(`
+						for _, v := range o.%s {
+							sz = sz + len(v) + %d
+						}
+						`, f.Name.String, IntSize)
+					} else {
+						ret += fmt.Sprintf(`
+					sz += len(o.%s)
+					`, f.Name.String)
+						n += IntSize
+					}
 				}
 			}
-			return ret + fmt.Sprintf("%d", n)
+			ret += fmt.Sprintf(`sz += %d`, n)
+			return ret
 		},
 		"StructFieldMarshal": func(fields []parser.StructField) string {
 			var ret string
 			for _, f := range fields {
+				opt := getOption("repeated", f.Options)
+				repeated := isBool(opt)
 				if f.Type.Type == nil {
-					ret += fmt.Sprintf(`if n, err = o.%s.MarshalTo(data); err != nil {
-						return nil, err
+					if repeated {
+						ret += fmt.Sprintf(`if n, err = o.MarshalInt(len(o.%s), data[offset:]); err != nil {
+						return 0, err
+						}
+						offset += n
+						for _, v := range o.%s {
+						if n, err = v.MarshalTo(data[offset:]); err != nil {
+							return 0, err
+						}
+						offset += n
+					}
+					`, f.Name.String, f.Name.String)
+					} else {
+						ret += fmt.Sprintf(`if n, err = o.%s.MarshalTo(data); err != nil {
+						return 0, err
 					}
 					offset += n
 					`, f.Name.String)
+					}
 					continue
 				}
 				if v, ok := typeToString[*f.Type.Type]; ok {
-					ret += fmt.Sprintf(`if n, err = o.Marshal%s(o.%s, data[offset:]); err != nil {
-						return nil, err
+					if repeated {
+						ret += fmt.Sprintf(`if n, err = o.MarshalInt(len(o.%s), data[offset:]); err != nil {
+						return 0, err
+						}
+						offset += n
+						for _, v := range o.%s {
+						if n, err = o.Marshal%s(v, data[offset:]); err != nil {
+							return 0, err
+						}
+						offset += n
+					}
+						`, f.Name.String, f.Name.String, v)
+					} else {
+						ret += fmt.Sprintf(`if n, err = o.Marshal%s(o.%s, data[offset:]); err != nil {
+						return 0, err
 					}
 					offset += n
-`, v, f.Name.String)
+		`, v, f.Name.String)
+					}
 				} else {
 					panic("unknown type")
 				}
 			}
-			ret += `	if offset != sz {
-				return nil, fmt.Errorf("%s size / offset different %d : %d", "Marshal", sz, offset)
-			}`
 			return ret
 		},
 		"StructFieldUnmarshal": func(fields []parser.StructField) string {
 			var ret string
 			for _, f := range fields {
+				opt := getOption("repeated", f.Options)
+				repeated := isBool(opt)
 				if f.Type.Type == nil {
-					ret += fmt.Sprintf(`if i, err = o.%s.UnmarshalTo(data[n:]); err != nil {
-						return err
+					if repeated {
+						ret += fmt.Sprintf(`if l, i, err = o.UnmarshalInt(data[n:]); err != nil {
+					return  0, err
+				}
+				n += i
+				if l > 0 {
+				o.%s = make([]*%s, l)
+				for j := range o.%s {
+					o.%s[j] = new(%s)
+					if i, err = o.%s[j].UnmarshalTo(data[n:]); err != nil {
+						return 0, err
 					}
 					n += i
-					`, f.Name.String)
+				}
+			}
+				`, f.Name.String, UpperFirst(*f.Type.Reference), f.Name.String, f.Name.String, UpperFirst(*f.Type.Reference), f.Name.String)
+					} else {
+						ret += fmt.Sprintf(`if i, err = o.%s.UnmarshalTo(data[n:]); err != nil {
+					return 0, err
+				}
+				n += i
+				`, f.Name.String)
+					}
 					continue
 				}
 				if v, ok := typeToString[*f.Type.Type]; ok {
-					ret += fmt.Sprintf(`if o.%s, i, err = o.Unmarshal%s(data[n:]); err != nil {
-						return err
+					if repeated {
+						ret += fmt.Sprintf(`if l, i, err = o.UnmarshalInt(data[n:]); err != nil {
+					return  0, err
+				}
+				n += i
+				if l > 0 {
+				o.%s = make([]%s, l)
+				for j := range o.%s {
+					if v, m, err := o.Unmarshal%s(data[n:]); err != nil {
+						return  0, err
+					}else{
+						i = m
+						o.%s[j] = v
 					}
 					n += i
-					`, f.Name.String, v)
+				}
+			}
+				`, f.Name.String, f.Type.Type.GoString(), f.Name.String, v, f.Name.String)
+					} else {
+						ret += fmt.Sprintf(`if o.%s, i, err = o.Unmarshal%s(data[n:]); err != nil {
+					return 0, err
+				}
+				n += i
+				`, f.Name.String, v)
+					}
 				} else {
 					panic("unknown type")
 				}
@@ -110,7 +228,7 @@ var (
 			if s == nil {
 				return ""
 			}
-			return *s
+			return UpperFirst(*s)
 		},
 	}}
 
@@ -124,15 +242,31 @@ import (
 `))
 
 	constTemplate, enumTemplate, structTemplate *template.Template
-
-	initTemplate = template.Must(template.New("init").Parse(`
-func init() {
-	{{- range $i, $sd := . }}
-	parse.AssertUpToDate(&{{ $sd.TableVar }}.s, new({{ $sd.Type }}))
-	{{- end }}
-}
-`))
 )
+
+func getOption(name string, fields []*parser.StructOption) *parser.Literal {
+	if fields == nil {
+		return nil
+	}
+	for _, f := range fields {
+		if f.Name == name {
+			return &f.Value
+		}
+	}
+	return nil
+}
+
+func UpperFirst(s string) string {
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func isBool(opt *parser.Literal) bool {
+	if opt == nil {
+		return false
+	}
+	value := GenerateLiteral(*opt)
+	return value == "true"
+}
 
 func init() {
 	constTemplateTmp := template.New("const")
@@ -185,7 +319,7 @@ func (o *{{$parent.Name.String}}) UnmarshalTo(data []byte) (int, error) {
 	if len(data) < 2 {
 		return 0, fmt.Errorf("invalid data size %d", len(data))
 	}
-	*o = PackageType(uint16(data[0]) | uint16(data[1])<<8)
+	*o = {{$parent.Name.String}}(uint16(data[0]) | uint16(data[1])<<8)
 	return 2, nil
 }
 
@@ -216,30 +350,57 @@ type {{.Name.String}} struct {
 {{ .Comments | FormatComment }}
 {{- end }}
 {{- if .Type.Type | eq nil }}
-	{{.Name.String}} {{with .Type.Reference}} *{{GetString .}} {{end}}
+	{{.Name.String}}{{with .Options}}{{if . | StructFieldIsRepeat}}[]{{end}}{{end}}*{{GetString .Type.Reference}} 
 {{- else}}
-	{{.Name.String}} {{.Type.Type.GoString}}
+	{{.Name.String}} {{with .Options}}{{if . | StructFieldIsRepeat}}[]{{end}}{{end}}{{.Type.Type.GoString}}
 {{- end}}
 {{- end}}
+}
+
+func (o *{{.Name.String}}) Size() int {
+	var sz int
+	{{.Fields | StructFieldLength}}
+	return sz
+}
+
+func (o *{{.Name.String}}) MarshalTo(data []byte) (int, error) {
+	var (
+		offset, n int
+		err error
+	)
+	{{.Fields | StructFieldMarshal}}
+	return offset, nil
 }
 
 // MarshalBinary encodes o as conform encoding.BinaryMarshaler.
 func (o *{{.Name.String}}) MarshalBinary() (data []byte, err error) {
-	sz := {{.Fields | StructFieldLength}}
+	sz := o.Size()
 	data = make([]byte, sz)
-	var offset, n int
-	{{.Fields | StructFieldMarshal}}
+	n, err := o.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	if n != sz {
+		return nil, fmt.Errorf("%s size / offset different %d : %d", "Marshal", sz, n)
+	}
 	return data, nil
+}
+
+func (o *{{.Name.String}}) UnmarshalTo(data []byte) (int, error) {
+	var (
+		i, n, l int
+		err  error
+	)
+	{{.Fields | StructFieldUnmarshal}}
+	_ = l
+	return n, nil
 }
 
 // Unmarshal decodes data as conform encoding.BinaryUnmarshaler.
 func (o *{{.Name.String}}) UnmarshalBinary(data []byte) error {
-	var (
-		i, n int
-		err  error
-	)
-	{{.Fields | StructFieldUnmarshal}}
-	return nil
+	_, err := o.UnmarshalTo(data)
+	return err
+
 }
 {{- end}}
 `))

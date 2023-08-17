@@ -29,7 +29,7 @@ struct SensorData
  uint32 temperature2
  int32 gyroscope [repeated = true]
  int32 accelerometer [repeated = true]
- string random
+ string random  [repeated = true]
 }
 
 struct SensorConfig

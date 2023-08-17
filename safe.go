@@ -279,6 +279,8 @@ func (Safe) UnmarshalBytes(bs []byte) (v []byte, n int, err error) {
 	if l < 0 {
 		err = ErrNegativeLength
 		return
+	} else if l == 0 {
+		return nil, n, nil
 	}
 	if len(bs[n:]) < int(l) {
 		err = ErrNotEnoughSpace

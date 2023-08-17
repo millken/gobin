@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"go/format"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"gobin/parser"
@@ -149,14 +151,26 @@ func (p *Parser) parseEnum(enums []parser.Enum) error {
 	}
 	return nil
 }
+
+func GenerateLiteral(literal parser.Literal) string {
+	result := ""
+	parser.LiteralExhaustiveSwitch(
+		literal,
+		func(literal float64) { result = fmt.Sprintf("%f", literal) },
+		func(literal int) { result = fmt.Sprintf("%d", literal) },
+		func(literal string) { result = literal },
+		func(literal bool) { result = strconv.FormatBool(literal) },
+		func() { result = "nil" },
+	)
+	return result
+}
+
 func splitTopLevelDeclarations(topLevelDeclarations []parser.TopLevelDeclaration) ([]parser.Option, []parser.Const, []parser.Enum, []parser.Struct) {
 	options := []parser.Option{}
 	consts := []parser.Const{}
 	structs := []parser.Struct{}
 	enums := []parser.Enum{}
-	UpperFirst := func(s string) string {
-		return strings.ToUpper(s[:1]) + s[1:]
-	}
+
 	for _, topLevelDeclaration := range topLevelDeclarations {
 		parser.TopLevelDeclarationExhaustiveSwitch(
 			topLevelDeclaration,

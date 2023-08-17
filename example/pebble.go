@@ -57,9 +57,20 @@ type BinPackage struct {
 	Signature []byte
 }
 
+func (o *BinPackage) Size() int {
+	var sz int
+
+	sz += o.Type.Size()
+	sz += len(o.Data)
+
+	sz += len(o.Signature)
+	sz += 20
+	return sz
+}
+
 // MarshalBinary encodes o as conform encoding.BinaryMarshaler.
 func (o *BinPackage) MarshalBinary() (data []byte, err error) {
-	sz := o.Type.Size() + len(o.Data) + len(o.Signature) + 20
+	sz := o.Size()
 	data = make([]byte, sz)
 	var offset, n int
 	if n, err = o.Type.MarshalTo(data); err != nil {
@@ -87,8 +98,8 @@ func (o *BinPackage) MarshalBinary() (data []byte, err error) {
 // Unmarshal decodes data as conform encoding.BinaryUnmarshaler.
 func (o *BinPackage) UnmarshalBinary(data []byte) error {
 	var (
-		i, n int
-		err  error
+		i, n, l int
+		err     error
 	)
 	if i, err = o.Type.UnmarshalTo(data[n:]); err != nil {
 		return err
@@ -107,6 +118,7 @@ func (o *BinPackage) UnmarshalBinary(data []byte) error {
 	}
 	n += i
 
+	_ = l
 	return nil
 }
 
@@ -122,14 +134,26 @@ type SensorData struct {
 	Humidity      uint32
 	Light         uint32
 	Temperature2  uint32
-	Gyroscope     int32
-	Accelerometer int32
-	Random        string
+	Gyroscope     []int32
+	Accelerometer []int32
+	Random        []string
+}
+
+func (o *SensorData) Size() int {
+	var sz int
+
+	sz += len(o.Gyroscope) * 4
+	sz += len(o.Accelerometer) * 4
+	for _, v := range o.Random {
+		sz = sz + len(v) + 8
+	}
+	sz += 64
+	return sz
 }
 
 // MarshalBinary encodes o as conform encoding.BinaryMarshaler.
 func (o *SensorData) MarshalBinary() (data []byte, err error) {
-	sz := len(o.Random) + 56
+	sz := o.Size()
 	data = make([]byte, sz)
 	var offset, n int
 	if n, err = o.MarshalUint32(o.Snr, data[offset:]); err != nil {
@@ -172,18 +196,36 @@ func (o *SensorData) MarshalBinary() (data []byte, err error) {
 		return nil, err
 	}
 	offset += n
-	if n, err = o.MarshalInt32(o.Gyroscope, data[offset:]); err != nil {
+	if n, err = o.MarshalInt(len(o.Gyroscope), data[offset:]); err != nil {
 		return nil, err
 	}
 	offset += n
-	if n, err = o.MarshalInt32(o.Accelerometer, data[offset:]); err != nil {
+	for _, v := range o.Gyroscope {
+		if n, err = o.MarshalInt32(v, data[offset:]); err != nil {
+			return nil, err
+		}
+		offset += n
+	}
+	if n, err = o.MarshalInt(len(o.Accelerometer), data[offset:]); err != nil {
 		return nil, err
 	}
 	offset += n
-	if n, err = o.MarshalString(o.Random, data[offset:]); err != nil {
+	for _, v := range o.Accelerometer {
+		if n, err = o.MarshalInt32(v, data[offset:]); err != nil {
+			return nil, err
+		}
+		offset += n
+	}
+	if n, err = o.MarshalInt(len(o.Random), data[offset:]); err != nil {
 		return nil, err
 	}
 	offset += n
+	for _, v := range o.Random {
+		if n, err = o.MarshalString(v, data[offset:]); err != nil {
+			return nil, err
+		}
+		offset += n
+	}
 	if offset != sz {
 		return nil, fmt.Errorf("%s size / offset different %d : %d", "Marshal", sz, offset)
 	}
@@ -193,8 +235,8 @@ func (o *SensorData) MarshalBinary() (data []byte, err error) {
 // Unmarshal decodes data as conform encoding.BinaryUnmarshaler.
 func (o *SensorData) UnmarshalBinary(data []byte) error {
 	var (
-		i, n int
-		err  error
+		i, n, l int
+		err     error
 	)
 	if o.Snr, i, err = o.UnmarshalUint32(data[n:]); err != nil {
 		return err
@@ -236,19 +278,50 @@ func (o *SensorData) UnmarshalBinary(data []byte) error {
 		return err
 	}
 	n += i
-	if o.Gyroscope, i, err = o.UnmarshalInt32(data[n:]); err != nil {
+	if l, i, err = o.UnmarshalInt(data[n:]); err != nil {
 		return err
 	}
 	n += i
-	if o.Accelerometer, i, err = o.UnmarshalInt32(data[n:]); err != nil {
+	o.Gyroscope = make([]int32, l)
+	for j := range o.Gyroscope {
+		if v, m, err := o.UnmarshalInt32(data[n:]); err != nil {
+			return err
+		} else {
+			i = m
+			o.Gyroscope[j] = v
+		}
+		n += i
+	}
+	if l, i, err = o.UnmarshalInt(data[n:]); err != nil {
 		return err
 	}
 	n += i
-	if o.Random, i, err = o.UnmarshalString(data[n:]); err != nil {
+	o.Accelerometer = make([]int32, l)
+	for j := range o.Accelerometer {
+		if v, m, err := o.UnmarshalInt32(data[n:]); err != nil {
+			return err
+		} else {
+			i = m
+			o.Accelerometer[j] = v
+		}
+		n += i
+	}
+	if l, i, err = o.UnmarshalInt(data[n:]); err != nil {
 		return err
 	}
 	n += i
+	o.Random = make([]string, l)
+	for j := range o.Random {
+		if v, m, err := o.UnmarshalString(data[n:]); err != nil {
+			return err
+		} else {
+			i = m
+			o.Random[j] = v
+		}
+		n += i
+	}
 
+	_ = l
 	return nil
 }
 
@@ -264,9 +337,17 @@ type SensorConfig struct {
 	DeviceConfigurable     bool
 }
 
+func (o *SensorConfig) Size() int {
+	var sz int
+
+	sz += len(o.Firmware)
+	sz += 33
+	return sz
+}
+
 // MarshalBinary encodes o as conform encoding.BinaryMarshaler.
 func (o *SensorConfig) MarshalBinary() (data []byte, err error) {
-	sz := len(o.Firmware) + 33
+	sz := o.Size()
 	data = make([]byte, sz)
 	var offset, n int
 	if n, err = o.MarshalUint32(o.BulkUpload, data[offset:]); err != nil {
@@ -310,8 +391,8 @@ func (o *SensorConfig) MarshalBinary() (data []byte, err error) {
 // Unmarshal decodes data as conform encoding.BinaryUnmarshaler.
 func (o *SensorConfig) UnmarshalBinary(data []byte) error {
 	var (
-		i, n int
-		err  error
+		i, n, l int
+		err     error
 	)
 	if o.BulkUpload, i, err = o.UnmarshalUint32(data[n:]); err != nil {
 		return err
@@ -346,6 +427,7 @@ func (o *SensorConfig) UnmarshalBinary(data []byte) error {
 	}
 	n += i
 
+	_ = l
 	return nil
 }
 
@@ -354,9 +436,15 @@ type SensorState struct {
 	State uint32
 }
 
+func (o *SensorState) Size() int {
+	var sz int
+	sz += 4
+	return sz
+}
+
 // MarshalBinary encodes o as conform encoding.BinaryMarshaler.
 func (o *SensorState) MarshalBinary() (data []byte, err error) {
-	sz := 4
+	sz := o.Size()
 	data = make([]byte, sz)
 	var offset, n int
 	if n, err = o.MarshalUint32(o.State, data[offset:]); err != nil {
@@ -372,14 +460,15 @@ func (o *SensorState) MarshalBinary() (data []byte, err error) {
 // Unmarshal decodes data as conform encoding.BinaryUnmarshaler.
 func (o *SensorState) UnmarshalBinary(data []byte) error {
 	var (
-		i, n int
-		err  error
+		i, n, l int
+		err     error
 	)
 	if o.State, i, err = o.UnmarshalUint32(data[n:]); err != nil {
 		return err
 	}
 	n += i
 
+	_ = l
 	return nil
 }
 
@@ -388,9 +477,17 @@ type SensorConfirm struct {
 	Owner string
 }
 
+func (o *SensorConfirm) Size() int {
+	var sz int
+
+	sz += len(o.Owner)
+	sz += 8
+	return sz
+}
+
 // MarshalBinary encodes o as conform encoding.BinaryMarshaler.
 func (o *SensorConfirm) MarshalBinary() (data []byte, err error) {
-	sz := len(o.Owner) + 8
+	sz := o.Size()
 	data = make([]byte, sz)
 	var offset, n int
 	if n, err = o.MarshalString(o.Owner, data[offset:]); err != nil {
@@ -406,13 +503,14 @@ func (o *SensorConfirm) MarshalBinary() (data []byte, err error) {
 // Unmarshal decodes data as conform encoding.BinaryUnmarshaler.
 func (o *SensorConfirm) UnmarshalBinary(data []byte) error {
 	var (
-		i, n int
-		err  error
+		i, n, l int
+		err     error
 	)
 	if o.Owner, i, err = o.UnmarshalString(data[n:]); err != nil {
 		return err
 	}
 	n += i
 
+	_ = l
 	return nil
 }

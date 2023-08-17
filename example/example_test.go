@@ -80,9 +80,9 @@ func TestA(t *testing.T) {
 		Name:     "hello",
 		BirthDay: 33,
 		Phone:    []byte("123"),
-		Siblings: 44,
+		Siblings: -44,
 		Spouse:   true,
-		Money:    1444.12324,
+		Money:    -1444.12324,
 		//Children: []string{"a", "b"},
 	}
 	data, err := a.MarshalBinary()
@@ -100,7 +100,7 @@ BenchmarkSearchRequest-8   	 7282776	       141.0 ns/op	      48 B/op	       2 a
 func BenchmarkSearchRequest(b *testing.B) {
 	a := &SearchRequest{
 		query:           "hello",
-		page_number:     1,
+		page_number:     -1,
 		result_per_page: 10,
 	}
 	for i := 0; i < b.N; i++ {

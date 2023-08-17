@@ -1,0 +1,31 @@
+// Package demo offers a demonstration.
+package example
+option go_package = "./api"
+
+enum StructClass {
+    None
+    Table
+    Inline
+}
+
+// Course is the grounds where the game of golf is played.
+struct course  {
+	uint64 ID    
+	string name
+	hole holes [repeated = true]
+	bytes image 
+	string tags  [repeated = true]
+}
+
+struct hole  {
+	// Lat is the latitude of the cup.
+	double lat
+	// Lon is the longitude of the cup.
+	double lon
+	// Par is the difficulty index.
+	uint8 par 
+	// Water marks the presence of water.
+	bool water 
+	// Sand marks the presence of sand.
+	bool sand
+}
