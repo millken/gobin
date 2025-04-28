@@ -117,9 +117,7 @@ func unmarshalSafeInteger64[T Integer64](bs []byte) (t T, n int, err error) {
 	return t, 8, nil
 }
 
-type Safe struct{}
-
-func (Safe) MarshalBool(v bool, bs []byte) (n int, err error) {
+func marshalBool(v bool, bs []byte) (n int, err error) {
 	if len(bs) < 1 {
 		return 0, ErrNotEnoughSpace
 	}
@@ -131,7 +129,7 @@ func (Safe) MarshalBool(v bool, bs []byte) (n int, err error) {
 	return 1, nil
 }
 
-func (Safe) UnmarshalBool(bs []byte) (v bool, n int, err error) {
+func unmarshalBool(bs []byte) (v bool, n int, err error) {
 	if len(bs) < 1 {
 		return false, 0, ErrNotEnoughSpace
 	}
@@ -144,6 +142,16 @@ func (Safe) UnmarshalBool(bs []byte) (v bool, n int, err error) {
 		err = ErrInvalidBool
 	}
 	return v, 1, err
+}
+
+type Safe struct{}
+
+func (Safe) MarshalBool(v bool, bs []byte) (n int, err error) {
+	return marshalBool(v, bs)
+}
+
+func (Safe) UnmarshalBool(bs []byte) (v bool, n int, err error) {
+	return unmarshalBool(bs)
 }
 
 func (Safe) MarshalInt(v int, bs []byte) (n int, err error) {
@@ -167,7 +175,7 @@ func (Safe) MarshalInt16(v int16, bs []byte) (n int, err error) {
 }
 
 func (Safe) UnmarshalInt16(bs []byte) (v int16, n int, err error) {
-	return unmarshalUnsafeInteger16[int16](bs)
+	return unmarshalSafeInteger16[int16](bs)
 }
 
 func (Safe) MarshalInt32(v int32, bs []byte) (n int, err error) {
@@ -237,7 +245,7 @@ func (Safe) MarshalString(v string, bs []byte) (n int, err error) {
 }
 
 func (Safe) UnmarshalString(bs []byte) (v string, n int, err error) {
-	l, n, err := unmarshalUnsafeInt(bs)
+	l, n, err := unmarshalSafeInt(bs)
 	if err != nil {
 		return
 	}
@@ -260,9 +268,22 @@ func (Safe) UnmarshalByte(bs []byte) (v byte, n int, err error) {
 	return unmarshalSafeInteger8[byte](bs)
 }
 
+// MarshalBytes encodes v as []byte. [isnil:bool][len:int][v:[]byte]
 func (Safe) MarshalBytes(v []byte, bs []byte) (n int, err error) {
-	n, err = marshalSafeInt(len(v), bs)
+	if v == nil {
+		return marshalBool(true, bs)
+	}
+	n, err = marshalBool(false, bs)
 	if err != nil {
+		return
+	}
+	n, err = marshalSafeInt(len(v), bs[n:])
+	if err != nil {
+		return
+	}
+	n += 1
+	//case: v = []byte{""}
+	if n == 1 {
 		return
 	}
 	if len(bs[n:]) < len(v) {
@@ -272,15 +293,23 @@ func (Safe) MarshalBytes(v []byte, bs []byte) (n int, err error) {
 }
 
 func (Safe) UnmarshalBytes(bs []byte) (v []byte, n int, err error) {
-	l, n, err := unmarshalUnsafeInt(bs)
+	isNil, n, err := unmarshalBool(bs)
 	if err != nil {
 		return
 	}
+	if isNil {
+		return nil, n, nil
+	}
+	l, n, err := unmarshalSafeInt(bs[1:])
+	if err != nil {
+		return
+	}
+	n += 1
 	if l < 0 {
 		err = ErrNegativeLength
 		return
 	} else if l == 0 {
-		return nil, n, nil
+		return []byte{}, n, nil
 	}
 	if len(bs[n:]) < int(l) {
 		err = ErrNotEnoughSpace
@@ -294,7 +323,7 @@ func (Safe) MarshalFloat32(v float32, bs []byte) (n int, err error) {
 }
 
 func (Safe) UnmarshalFloat32(bs []byte) (v float32, n int, err error) {
-	uv, n, err := unmarshalUnsafeInteger32[uint32](bs)
+	uv, n, err := unmarshalSafeInteger32[uint32](bs)
 	if err != nil {
 		return
 	}
@@ -306,7 +335,7 @@ func (Safe) MarshalFloat64(v float64, bs []byte) (n int, err error) {
 }
 
 func (Safe) UnmarshalFloat64(bs []byte) (v float64, n int, err error) {
-	uv, n, err := unmarshalUnsafeInteger64[uint64](bs)
+	uv, n, err := unmarshalSafeInteger64[uint64](bs)
 	if err != nil {
 		return
 	}

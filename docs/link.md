@@ -5,3 +5,6 @@ https://github.com/alecthomas/participle/blob/master/_examples/protobuf/main.go
 github.com/mus-format/mus-go
 https://github.com/xplosunn/tenecs/blob/main/codegen/codegen.go#L370
 https://github.com/andyleap/parser
+https://github.com/hiihbcb/jingo/blob/omitempty/structencoder.go
+https://github.com/pascaldekloe/colfer/blob/master/schema.go
+github.com/cybriq/gotiny

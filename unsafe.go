@@ -217,6 +217,9 @@ func (Unsafe) UnmarshalString(bs []byte) (v string, n int, err error) {
 		err = ErrNegativeLength
 		return
 	}
+	if l == 0 {
+		return "", n, nil
+	}
 	if len(bs[n:]) < int(l) {
 		err = ErrNotEnoughSpace
 		return
@@ -252,6 +255,9 @@ func (Unsafe) UnmarshalBytes(bs []byte) (v []byte, n int, err error) {
 	if l < 0 {
 		err = ErrNegativeLength
 		return
+	}
+	if l == 0 {
+		return nil, n, nil
 	}
 	if len(bs[n:]) < int(l) {
 		err = ErrNotEnoughSpace

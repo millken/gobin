@@ -16,6 +16,7 @@ const (
 	g int64   = 1
 )
 
+//go:generate go run github.com/millken/gobin/cmd/gobingen
 type SearchRequest struct {
 	gobin.Unsafe
 	query           string
